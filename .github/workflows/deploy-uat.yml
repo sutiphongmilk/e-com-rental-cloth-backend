@@ -108,8 +108,8 @@ jobs:
           git reset --hard origin/uat
 
           $commitSha = (git rev-parse --short HEAD).Trim()
-          $commitMsg = (git log -1 --pretty=%s).Trim()
-          $commitAuthor = (git log -1 --pretty=%an).Trim()
+          $commitMsg = ((git log -1 --pretty=%s) -replace '\|', '/').Trim()
+          $commitAuthor = ((git log -1 --pretty=%an) -replace '\|', '/').Trim()
           Write-Output "Synced UAT Backend to commit: $commitSha - $commitMsg"
 
           # 3. Rebuild & restart UAT containers (postgres + migrate + api + worker + cloudflared)
@@ -143,7 +143,7 @@ jobs:
           # 5. Clean up dangling images
           docker image prune -f | Out-Null
 
-          # 6. Collect container resource stats & write rich GitHub Job Summary card
+          # 6. Collect container resource stats & write GitHub Job Summary card (pure ASCII source for Windows PS 5.1)
           $bt = [char]96
           $durationSec = [math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1)
           $containers = @(
@@ -163,23 +163,23 @@ jobs:
           }
 
           $summary = @(
-            "## 🚀 UAT Backend Deployment Summary",
+            "## UAT Backend Deployment Summary",
             "",
             "| Property | Value |",
             "| :--- | :--- |",
             "| **Environment** | ${bt}uat${bt} (Active) |",
             "| **Live API Base URL** | [$env:UAT_PUBLIC_URL]($env:UAT_PUBLIC_URL) |",
             "| **Health Check** | [$env:UAT_PUBLIC_URL/api/v1/health]($env:UAT_PUBLIC_URL/api/v1/health) (${bt}200 OK${bt}) |",
-            "| **Deployed Commit** | ${bt}$commitSha${bt} — $commitMsg *(by $commitAuthor)* |",
+            "| **Deployed Commit** | ${bt}$commitSha${bt} - $commitMsg *(by $commitAuthor)* |",
             "| **Deploy Duration** | ${durationSec}s |",
             "",
-            "### 📦 Active UAT Backend Containers",
+            "### Active UAT Backend Containers",
             "| Container | CPU | Memory Usage |",
             "| :--- | :--- | :--- |",
             $statsLines
           ) -join "`n"
 
-          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          [System.IO.File]::AppendAllText($env:GITHUB_STEP_SUMMARY, "$summary`n", [System.Text.UTF8Encoding]::new($false))
 
       - name: Update GitHub Deployment Status (Success)
         if: success() && steps.gh_deploy.outputs.deployment_id != ''
