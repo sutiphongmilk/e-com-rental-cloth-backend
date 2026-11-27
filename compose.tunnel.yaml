@@ -1,0 +1,22 @@
+# Automatically included by scripts/docker.go when CLOUDFLARE_TUNNEL_TOKEN is set in .env
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: ecom-rental-backend-cloudflared-${APP_ENV:-uat}
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - api
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

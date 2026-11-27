@@ -14,6 +14,7 @@ type Config struct {
 	CORSAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envSeparator:"," envDefault:"http://localhost:3000"`
 	SessionCookieName  string   `env:"SESSION_COOKIE_NAME" envDefault:"rental_sid"`
 	SessionTTLHours    int      `env:"SESSION_TTL_HOURS" envDefault:"168"`
+	CookieSecure       bool     `env:"COOKIE_SECURE"`
 	TurnstileSecretKey string   `env:"TURNSTILE_SECRET_KEY"`
 }
 
@@ -27,6 +28,10 @@ func Load() (Config, error) {
 
 func (c Config) IsProduction() bool {
 	return c.AppEnv == "production"
+}
+
+func (c Config) UseSecureCookie() bool {
+	return c.IsProduction() || c.CookieSecure
 }
 
 func (c Config) SessionTTL() time.Duration {

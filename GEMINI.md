@@ -52,7 +52,7 @@
 - **Git Branches:** `dev` (พัฒนาฟีเจอร์หลัก) -> `uat` (ทดสอบบน UAT Server) -> `main` (Production)
 - **โฟลเดอร์แยกอิสระ (ป้องกันพอร์ต, Container, และข้อมูล DB ชนกันเมื่อรันพร้อมกันบนเครื่องเดียว):**
   - **Dev Workspace:** `e-com-rental-cloth/backend` (เกาะ Branch `dev`, ตั้ง `APP_ENV=local`, `PORT=8080`, `POSTGRES_PORT=5432`)
-  - **UAT Host Folder:** `e-com-rental-cloth-uat/backend` (เกาะ Branch `uat`, ตั้ง `APP_ENV=uat`, `PORT=8180` — เวลาอัปเดต UAT ให้รัน `go run ./scripts/docker.go redeploy` ในโฟลเดอร์ UAT)
+  - **UAT Host Folder:** `e-com-rental-cloth-uat/backend` (เกาะ Branch `uat`, ตั้ง `APP_ENV=uat`, `PORT=8180`, เชื่อมโดเมน `https://api-uat-rental-cloth.sutiphonglabs.com` ผ่าน Cloudflare Tunnel `rental-cloth-backend-uat-tunnel` อัตโนมัติเมื่อมีค่า `CLOUDFLARE_TUNNEL_TOKEN` ใน `.env` — เวลาอัปเดต UAT ให้รัน `go run ./scripts/docker.go redeploy` ในโฟลเดอร์ UAT)
 
 ### การสลับโหมด Docker อัตโนมัติด้วย `APP_ENV` (`scripts/docker.go`)
 สคริปต์จะตั้งชื่อ Compose Project, Volume ฐานข้อมูล, และ Container แยกตาม `APP_ENV` (`ecom-rental-backend-<env>`) ทำให้รันทั้งชุด Dev และชุด UAT พร้อมกันบนเครื่องเดียวได้โดยข้อมูลไม่ปนกัน:

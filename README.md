@@ -16,7 +16,7 @@
 ## โครงสร้าง Git Branches & การแยกโฟลเดอร์ Dev / UAT บนเครื่องหลัก
 - **Branches:** `dev` (พัฒนาฟีเจอร์หลัก) -> `uat` (ทดสอบบน UAT Server) -> `main` (Production)
 - **Dev Folder:** `e-com-rental-cloth/backend` (Branch `dev`, `APP_ENV=local`, `PORT=8080`)
-- **UAT Folder:** `e-com-rental-cloth-uat/backend` (Branch `uat`, `APP_ENV=uat`, `PORT=8180`)
+- **UAT Folder:** `e-com-rental-cloth-uat/backend` (Branch `uat`, `APP_ENV=uat`, `PORT=8180`, Public URL: `https://api-uat-rental-cloth.sutiphonglabs.com` ผ่าน Cloudflare Tunnel)
 
 ## การรันผ่าน Docker
 คัดลอก `.env.example` เป็น `.env` แล้วรันคำสั่ง:

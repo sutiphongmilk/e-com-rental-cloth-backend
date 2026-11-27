@@ -86,6 +86,12 @@ func main() {
 	}
 	rawAppEnv = strings.ToLower(strings.TrimSpace(rawAppEnv))
 
+	tunnelToken := os.Getenv("CLOUDFLARE_TUNNEL_TOKEN")
+	if strings.TrimSpace(tunnelToken) == "" {
+		tunnelToken = fileEnv["CLOUDFLARE_TUNNEL_TOKEN"]
+	}
+	tunnelToken = strings.TrimSpace(tunnelToken)
+
 	// Both "production" and "uat" run the compiled, low-RAM hardened Distroless container; others run local dev mode
 	isCompiledEnv := rawAppEnv == "production" || rawAppEnv == "uat"
 	overlayFile := "compose.local.yaml"
@@ -110,13 +116,18 @@ func main() {
 		userArgs = []string{"up", "-d", "--build"}
 	}
 
-	composeArgs := append([]string{
-		"compose",
-		"-p", projectName,
-		"-f", "compose.yaml",
-		"-f", overlayFile,
-	}, userArgs...)
+	composeFiles := []string{"-f", "compose.yaml", "-f", overlayFile}
+	if tunnelToken != "" {
+		composeFiles = append(composeFiles, "-f", "compose.tunnel.yaml")
+	}
 
-	fmt.Printf("[Docker] APP_ENV=%q | project=%q -> Using %s (%s)\n", rawAppEnv, projectName, modeLabel, overlayFile)
+	composeArgs := append([]string{"compose", "-p", projectName}, composeFiles...)
+	composeArgs = append(composeArgs, userArgs...)
+
+	tunnelSuffix := ""
+	if tunnelToken != "" {
+		tunnelSuffix = " + compose.tunnel.yaml"
+	}
+	fmt.Printf("[Docker] APP_ENV=%q | project=%q -> Using %s (%s%s)\n", rawAppEnv, projectName, modeLabel, overlayFile, tunnelSuffix)
 	runCmd(rootDir, cmdEnv, "docker", composeArgs...)
 }
