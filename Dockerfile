@@ -40,7 +40,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 CMD ["air", "-c", ".air.api.toml"]
 
 # -----------------------------------------------------------------------------
-# Stage 3: Production Static Binary Builder
+# Stage 3: Compiled Static Binary Builder (used for both UAT and Production)
 # -----------------------------------------------------------------------------
 FROM deps AS build
 COPY . .
@@ -51,11 +51,12 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate
 
 # -----------------------------------------------------------------------------
-# Target B: Hardened Distroless Production Runner (used when APP_ENV == "production")
+# Target B: Hardened Distroless Compiled Runner (used when APP_ENV is "uat" or "production")
 # -----------------------------------------------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot AS production
+ARG APP_ENV=production
 WORKDIR /app
-ENV APP_ENV=production \
+ENV APP_ENV=${APP_ENV} \
     HTTP_ADDR=0.0.0.0:8080
 
 COPY --from=build --chown=nonroot:nonroot /out/api /app/api

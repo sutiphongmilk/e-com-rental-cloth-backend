@@ -46,16 +46,25 @@
 
 ---
 
-## 4. การรันผ่าน Docker และการสลับโหมดด้วย `APP_ENV` (มาตรฐานเดียวกับ `frontend/`)
-โปรเจกต์รองรับการสลับโหมดผ่าน `scripts/docker.go` อัตโนมัติจากค่า `APP_ENV` ในไฟล์ `.env` (ดูตัวอย่างใน `.env.example`):
-- **`APP_ENV=production`:** ใช้ `compose.yaml` + `compose.prod.yaml` (Multi-stage build คอมไพล์ Static Binary รันบน `gcr.io/distroless/static-debian12:nonroot`, แยกโปรเซส `postgres` + `migrate` + `api` + `worker`, เปิด `read_only: true`, `cap_drop: ALL`, `no-new-privileges:true`, ไม่เปิดพอร์ต `5432` ออกนอก Docker Network, และเช็ก `HEALTHCHECK` ผ่าน `/app/api -healthcheck`)
-- **`APP_ENV` เป็นค่าอื่นทั้งหมด (เช่น `local`, `development`):** ใช้ `compose.yaml` + `compose.local.yaml` (รันโหมด Dev พร้อม Hot-reload ด้วย `air`, แยก Volume ของ Go Cache ใน Container ไม่ให้ชนกับ Windows, และเปิดพอร์ต `127.0.0.1:5432` ให้เครื่องนอกต่อตรวจ DB ได้)
+## 4. โครงสร้าง Git Branches, การแยกโฟลเดอร์ Dev / UAT, และการรัน Docker (`APP_ENV`)
+
+### โครงสร้าง Branch & โฟลเดอร์บนเครื่องหลัก (มาตรฐานเดียวกับ `frontend/`)
+- **Git Branches:** `dev` (พัฒนาฟีเจอร์หลัก) -> `uat` (ทดสอบบน UAT Server) -> `main` (Production)
+- **โฟลเดอร์แยกอิสระ (ป้องกันพอร์ต, Container, และข้อมูล DB ชนกันเมื่อรันพร้อมกันบนเครื่องเดียว):**
+  - **Dev Workspace:** `e-com-rental-cloth/backend` (เกาะ Branch `dev`, ตั้ง `APP_ENV=local`, `PORT=8080`, `POSTGRES_PORT=5432`)
+  - **UAT Host Folder:** `e-com-rental-cloth-uat/backend` (เกาะ Branch `uat`, ตั้ง `APP_ENV=uat`, `PORT=8180` — เวลาอัปเดต UAT ให้รัน `go run ./scripts/docker.go redeploy` ในโฟลเดอร์ UAT)
+
+### การสลับโหมด Docker อัตโนมัติด้วย `APP_ENV` (`scripts/docker.go`)
+สคริปต์จะตั้งชื่อ Compose Project, Volume ฐานข้อมูล, และ Container แยกตาม `APP_ENV` (`ecom-rental-backend-<env>`) ทำให้รันทั้งชุด Dev และชุด UAT พร้อมกันบนเครื่องเดียวได้โดยข้อมูลไม่ปนกัน:
+- **`APP_ENV=uat` หรือ `APP_ENV=production`:** ใช้ `compose.yaml` + `compose.prod.yaml` (Multi-stage build คอมไพล์ Static Binary รันบน `gcr.io/distroless/static-debian12:nonroot` ประหยัด RAM เครื่องหลักสูงสุด กินเพียง ~20–30MB ต่อโปรเซส, แยก `postgres` + `migrate` + `api` + `worker`, เปิด `read_only: true`, `cap_drop: ALL`, `no-new-privileges:true`, และไม่เปิดพอร์ต `5432` ออกนอกเครือข่าย Docker)
+- **`APP_ENV` เป็นค่าอื่นทั้งหมด (เช่น `local`, `development`):** ใช้ `compose.yaml` + `compose.local.yaml` (รันโหมด Dev พร้อม Hot-reload ด้วย `air`, แยก Volume ของ Go Cache ใน Container ไม่ให้ชนกับ Windows, และเปิดพอร์ต `127.0.0.1:5432` ให้เครื่องพัฒนาต่อตรวจ DB ได้)
 - คำสั่งหลัก (รันในโฟลเดอร์ `backend/`):
   - `go run ./scripts/docker.go up --build` (หรือ `up -d --build`)
+  - `go run ./scripts/docker.go redeploy` (`git pull` + `up -d --build` สำหรับอัปเดต UAT/Prod)
   - `go run ./scripts/docker.go down`
   - `go run ./scripts/docker.go logs -f`
   - `go run ./scripts/docker.go config`
-- ทำงานร่วมกับ Monitoring กลางใน `../infra/compose.monitoring.yaml` (`Uptime Kuma` เช็ก `http://host.docker.internal:8080/api/v1/health` และ `Dozzle` ดู Log/CPU/RAM แยกของ `api`, `worker`, `postgres`)
+- ทำงานร่วมกับ Monitoring กลางใน `../infra/compose.monitoring.yaml` (`Uptime Kuma` เช็ก `http://host.docker.internal:8080/api/v1/health` สำหรับ Dev และ `:8180/api/v1/health` สำหรับ UAT พร้อมดู Log รายกล่องใน `Dozzle`)
 
 ---
 

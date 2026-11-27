@@ -1,14 +1,12 @@
-# Active automatically when APP_ENV is NOT "production" (e.g. local, development)
+# Active automatically when APP_ENV is NOT "production" or "uat" (e.g. local, development)
 services:
   postgres:
-    container_name: ecom-rental-postgres-local
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     mem_limit: 512m
     restart: "no"
 
   migrate:
-    container_name: ecom-rental-backend-migrate-local
     build:
       context: .
       target: local
@@ -25,7 +23,6 @@ services:
     command: ["go", "run", "./cmd/migrate"]
 
   api:
-    container_name: ecom-rental-backend-api-local
     build:
       context: .
       target: local
@@ -45,7 +42,6 @@ services:
     restart: "no"
 
   worker:
-    container_name: ecom-rental-backend-worker-local
     build:
       context: .
       target: local
