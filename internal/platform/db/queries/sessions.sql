@@ -30,3 +30,9 @@ UPDATE sessions
 SET revoked_at = NOW()
 WHERE user_id = $1
   AND revoked_at IS NULL;
+
+-- name: PurgeStaleSessions :execrows
+DELETE FROM sessions
+WHERE expires_at < NOW() - INTERVAL '7 days'
+   OR (revoked_at IS NOT NULL AND revoked_at < NOW() - INTERVAL '7 days');
+

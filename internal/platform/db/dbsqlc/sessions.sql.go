@@ -101,6 +101,20 @@ func (q *Queries) GetActiveSessionByHash(ctx context.Context, tokenHash []byte) 
 	return i, err
 }
 
+const purgeStaleSessions = `-- name: PurgeStaleSessions :execrows
+DELETE FROM sessions
+WHERE expires_at < NOW() - INTERVAL '7 days'
+   OR (revoked_at IS NOT NULL AND revoked_at < NOW() - INTERVAL '7 days')
+`
+
+func (q *Queries) PurgeStaleSessions(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeStaleSessions)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeAllUserSessions = `-- name: RevokeAllUserSessions :exec
 UPDATE sessions
 SET revoked_at = NOW()

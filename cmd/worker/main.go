@@ -36,7 +36,8 @@ func main() {
 	defer pool.Close()
 
 	workers := river.NewWorkers()
-	// Register domain background workers here (e.g. notification email/LINE, booking expiration cleanup)
+	river.AddWorker(workers, queue.NewPurgeStaleSessionsWorker(pool))
+	// Register additional domain background workers here (e.g. notification email/LINE, booking expiration cleanup)
 
 	riverClient, err := queue.NewWorkerClient(pool, workers)
 	if err != nil {
