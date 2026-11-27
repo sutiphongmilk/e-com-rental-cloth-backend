@@ -1,0 +1,26 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - depguard
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  settings:
+    depguard:
+      rules:
+        platform_isolation:
+          files:
+            - "**/internal/platform/**"
+          deny:
+            - pkg: "e-com-rental-cloth/backend/internal/modules"
+              desc: "platform layer must remain generic and never import business domain modules"
+        forbid_gorm_and_axios_equivalents:
+          files:
+            - "$all"
+          deny:
+            - pkg: "gorm.io/gorm"
+              desc: "use sqlc + pgx/v5 instead of GORM to preserve compile-time type safety and PostgreSQL range constraints"

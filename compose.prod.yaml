@@ -1,0 +1,63 @@
+# Active automatically when APP_ENV="production"
+services:
+  postgres:
+    container_name: ecom-rental-postgres-prd
+    mem_limit: 512m
+    shm_size: 128m
+    restart: unless-stopped
+
+  migrate:
+    container_name: ecom-rental-backend-migrate-prd
+    image: ecom-rental-backend:prod
+    build:
+      context: .
+      target: production
+    environment:
+      APP_ENV: production
+    entrypoint: ["/app/migrate"]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+
+  api:
+    container_name: ecom-rental-backend-api-prd
+    image: ecom-rental-backend:prod
+    build:
+      context: .
+      target: production
+    environment:
+      APP_ENV: production
+    entrypoint: ["/app/api"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=32M,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    restart: unless-stopped
+
+  worker:
+    container_name: ecom-rental-backend-worker-prd
+    image: ecom-rental-backend:prod
+    build:
+      context: .
+      target: production
+    environment:
+      APP_ENV: production
+    entrypoint: ["/app/worker"]
+    healthcheck:
+      disable: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32M,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    restart: unless-stopped

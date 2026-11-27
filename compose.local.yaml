@@ -1,0 +1,71 @@
+# Active automatically when APP_ENV is NOT "production" (e.g. local, development)
+services:
+  postgres:
+    container_name: ecom-rental-postgres-local
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    mem_limit: 512m
+    restart: "no"
+
+  migrate:
+    container_name: ecom-rental-backend-migrate-local
+    build:
+      context: .
+      target: local
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+    volumes:
+      - ./cmd:/app/cmd
+      - ./internal:/app/internal
+      - ./migrations:/app/migrations
+      - ./go.mod:/app/go.mod
+      - ./go.sum:/app/go.sum
+      - backend_go_mod_cache:/go/pkg/mod
+      - backend_go_build_cache:/tmp/go-build
+    command: ["go", "run", "./cmd/migrate"]
+
+  api:
+    container_name: ecom-rental-backend-api-local
+    build:
+      context: .
+      target: local
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+    volumes:
+      - ./cmd:/app/cmd
+      - ./internal:/app/internal
+      - ./migrations:/app/migrations
+      - ./go.mod:/app/go.mod
+      - ./go.sum:/app/go.sum
+      - ./.air.api.toml:/app/.air.api.toml
+      - backend_go_mod_cache:/go/pkg/mod
+      - backend_go_build_cache:/tmp/go-build
+    command: ["air", "-c", ".air.api.toml"]
+    mem_limit: 1g
+    restart: "no"
+
+  worker:
+    container_name: ecom-rental-backend-worker-local
+    build:
+      context: .
+      target: local
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+    volumes:
+      - ./cmd:/app/cmd
+      - ./internal:/app/internal
+      - ./migrations:/app/migrations
+      - ./go.mod:/app/go.mod
+      - ./go.sum:/app/go.sum
+      - ./.air.worker.toml:/app/.air.worker.toml
+      - backend_go_mod_cache:/go/pkg/mod
+      - backend_go_build_cache:/tmp/go-build
+    healthcheck:
+      disable: true
+    command: ["air", "-c", ".air.worker.toml"]
+    mem_limit: 512m
+    restart: "no"
+
+volumes:
+  backend_go_mod_cache:
+  backend_go_build_cache:

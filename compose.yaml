@@ -1,0 +1,82 @@
+name: ecom-rental-backend
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-backend-env: &backend-common-env
+  HTTP_ADDR: 0.0.0.0:8080
+  DATABASE_URL: ${DOCKER_DATABASE_URL:-postgres://${POSTGRES_USER:-rental_app}:${POSTGRES_PASSWORD:-rental_dev_secret}@postgres:5432/${POSTGRES_DB:-rental_cloth_db}?sslmode=disable}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rental_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rental_dev_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-rental_cloth_db}
+      TZ: Asia/Bangkok
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rental_app} -d ${POSTGRES_DB:-rental_cloth_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  migrate:
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *backend-common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
+  api:
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *backend-common-env
+    ports:
+      - "${PORT:-8080}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    logging: *default-logging
+
+  worker:
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *backend-common-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    logging: *default-logging
+
+volumes:
+  postgres_data:

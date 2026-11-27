@@ -1,0 +1,19 @@
+# Binaries & build artifacts
+bin/
+dist/
+tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.log
+coverage*
+.DS_Store
+
+# Local env files (keep .env.example tracked)
+.env
+.env.*
+!.env.example
