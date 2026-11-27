@@ -78,3 +78,11 @@
 - `internal/testutil/` — ตัวช่วยรัน PostgreSQL จริงใน Docker สำหรับทำ Feature Test
 - `migrations/` — ไฟล์ SQL Migration (`goose`) และชุดฝังไฟล์ `embed.go`
 - `scripts/docker.go` — ตัวสลับไฟล์ Docker Compose อัตโนมัติตาม `APP_ENV` ใน `.env`
+
+---
+
+## 6. แหล่งเก็บเอกสารโปรเจกต์ (Google Drive & Google Docs)
+จัดการผ่านปลั๊กอิน `gdrive` (ค้นหา/ดูรายการไฟล์ในโฟลเดอร์) และ `gdocs` (อ่าน/สร้าง/แก้ไขเอกสาร Google Docs โดยระบุ `--folder <FOLDER_ID>` ทุกครั้งที่สร้างเอกสารใหม่):
+- **E-Com Rental Cloth (Project Root):** `1sjyITw-_oA7UzhAwHAUMZkBeU5e8_ghw` (https://drive.google.com/drive/folders/1sjyITw-_oA7UzhAwHAUMZkBeU5e8_ghw)
+- **SRS (Requirements, API & Feature Specs):** `17ULXLaPIaeNwDS8eD5bZ8tg04bs0PTgL` (https://drive.google.com/drive/folders/17ULXLaPIaeNwDS8eD5bZ8tg04bs0PTgL)
+- **Datadic (Data Dictionary & PostgreSQL Schema Docs):** `1Su7ZnF53l-das0KVW8z0z4eO83yZAORH` (https://drive.google.com/drive/folders/1Su7ZnF53l-das0KVW8z0z4eO83yZAORH)
