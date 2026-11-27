@@ -91,3 +91,4 @@
 - **E-Com Rental Cloth (Project Root):** `1sjyITw-_oA7UzhAwHAUMZkBeU5e8_ghw` (https://drive.google.com/drive/folders/1sjyITw-_oA7UzhAwHAUMZkBeU5e8_ghw)
 - **SRS (Requirements, API & Feature Specs):** `17ULXLaPIaeNwDS8eD5bZ8tg04bs0PTgL` (https://drive.google.com/drive/folders/17ULXLaPIaeNwDS8eD5bZ8tg04bs0PTgL)
 - **Datadic (Data Dictionary & PostgreSQL Schema Docs):** `1Su7ZnF53l-das0KVW8z0z4eO83yZAORH` (https://drive.google.com/drive/folders/1Su7ZnF53l-das0KVW8z0z4eO83yZAORH)
+- **Deployment (CI/CD Workflow & System Test URLs):** `1LrwbTggBmG0PbGlwL_Aamslpvs2Bo7YC` (https://drive.google.com/drive/folders/1LrwbTggBmG0PbGlwL_Aamslpvs2Bo7YC)
