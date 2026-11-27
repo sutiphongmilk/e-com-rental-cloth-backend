@@ -13,12 +13,13 @@
 - `migrations` — ไฟล์ SQL Migration (`goose`)
 - `scripts/docker.go` — ตัวรัน Docker Compose สลับโหมด `local` / `production` อัตโนมัติตามค่า `APP_ENV` ใน `.env`
 
-## โครงสร้าง Git Branches, CI/CD & การแยกโฟลเดอร์ Dev / UAT
-- **สายพาน Git Branches:** กิ่งนักพัฒนา/ฟีเจอร์ (`milk`, `<dev-name>`, `feat/*`, `fix/*`) -> `git pull --rebase origin dev` -> Merge/PR เข้า `dev` *(รัน CI + Auto-merge เข้า `uat` โดยยังไม่ Deploy)* -> กดรัน **`Deploy UAT (Manual)`** บน GitHub Actions เพื่ออัปเดต UAT -> Merge เข้า `main` *(Production)*
+## โครงสร้าง Git Branches, CI/CD & การแยกโฟลเดอร์ 3 ชุดบนเครื่องหลัก
+- **สายพาน Git Branches:** กิ่งนักพัฒนา/ฟีเจอร์ (`milk`, `<dev-name>`, `feat/*`, `fix/*`) -> `git pull --rebase origin dev` -> Merge/PR เข้า `dev` *(รัน CI -> **Auto-Deploy ขึ้น Dev Server** -> Auto-merge เข้า `uat` โดยยังไม่ Deploy UAT)* -> กดรัน **`Deploy UAT (Manual)`** บน GitHub Actions เพื่ออัปเดต UAT -> Merge เข้า `main` *(Production)*
 - **Local Workspace:** `e-com-rental-cloth/backend` (เกาะกิ่ง `milk`, `APP_ENV=local`, `PORT=8080`, `POSTGRES_PORT=5432`)
-- **UAT Host Folder:** `e-com-rental-cloth-uat/backend` (ล็อกกิ่ง `uat`, `APP_ENV=uat`, `PORT=8180`, `POSTGRES_PORT=5532`, Public URL: `https://api-uat-rental-cloth.sutiphonglabs.com` ผ่าน Cloudflare Tunnel)
+- **Dev Server Folder:** `e-com-rental-cloth-dev/backend` (ล็อกกิ่ง `dev`, `APP_ENV=dev`, `PORT=8050`, Public URL: `https://api-dev-rental-cloth.sutiphonglabs.com` ผ่าน Cloudflare Tunnel)
+- **UAT Server Folder:** `e-com-rental-cloth-uat/backend` (ล็อกกิ่ง `uat`, `APP_ENV=uat`, `PORT=8180`, Public URL: `https://api-uat-rental-cloth.sutiphonglabs.com` ผ่าน Cloudflare Tunnel)
 - **GitHub Actions (`.github/workflows/`):**
-  - `ci.yml` — รัน `golangci-lint`, `govulncheck`, `go test`, และคอมไพล์ Binary ทดสอบทุกกิ่งที่ Push พร้อม Auto-merge `dev -> uat` เมื่อรวมเข้า `dev`
+  - `ci.yml` — รัน `golangci-lint`, `govulncheck`, `go test`, และคอมไพล์ Binary ทดสอบทุกกิ่งที่ Push พร้อม **Auto-Deploy ขึ้น Dev Server (`:8050`)** และ Auto-merge `dev -> uat` เมื่อรวมเข้า `dev`
   - `deploy-uat.yml` — กดรันแบบ Manual (`workflow_dispatch`) ผ่าน Self-Hosted Runner บนเครื่องหลักเพื่ออัปเดต UAT Container และตรวจ `/api/v1/health`
 
 ## การรันผ่าน Docker
@@ -29,7 +30,7 @@ go run ./scripts/docker.go redeploy
 go run ./scripts/docker.go logs -f
 go run ./scripts/docker.go down
 ```
-- เมื่อ `APP_ENV=uat` หรือ `APP_ENV=production` จะใช้ `compose.yaml` + `compose.prod.yaml` (`Distroless` static binary, `read_only: true`, `cap_drop: ALL`, แยก Compose Project/DB Volume ไม่ชนกับ Dev)
+- เมื่อ `APP_ENV=dev`, `APP_ENV=uat`, หรือ `APP_ENV=production` จะใช้ `compose.yaml` + `compose.prod.yaml` (`Distroless` static binary, `read_only: true`, `cap_drop: ALL`, แยก Compose Project/DB Volume ไม่ชนกัน)
 - เมื่อ `APP_ENV` เป็นค่าอื่น (เช่น `local`) จะใช้ `compose.yaml` + `compose.local.yaml` (Hot-reload ด้วย `air` และเปิดพอร์ต `127.0.0.1:5432`)
 
 ## คำสั่งพัฒนาและตรวจสอบคุณภาพโค้ด

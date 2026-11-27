@@ -1,4 +1,4 @@
-# Active automatically when APP_ENV is "uat" or "production"
+# Active automatically when APP_ENV is "dev", "uat", or "production"
 services:
   postgres:
     mem_limit: 512m

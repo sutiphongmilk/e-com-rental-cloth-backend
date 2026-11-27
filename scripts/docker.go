@@ -92,8 +92,8 @@ func main() {
 	}
 	tunnelToken = strings.TrimSpace(tunnelToken)
 
-	// Both "production" and "uat" run the compiled, low-RAM hardened Distroless container; others run local dev mode
-	isCompiledEnv := rawAppEnv == "production" || rawAppEnv == "uat"
+	// "dev", "uat", and "production" run the compiled, low-RAM hardened Distroless container; "local" runs Air hot-reload mode
+	isCompiledEnv := rawAppEnv == "production" || rawAppEnv == "uat" || rawAppEnv == "dev"
 	overlayFile := "compose.local.yaml"
 	modeLabel := fmt.Sprintf("LOCAL DEV (%s)", rawAppEnv)
 	if isCompiledEnv {
