@@ -13,10 +13,13 @@
 - `migrations` — ไฟล์ SQL Migration (`goose`)
 - `scripts/docker.go` — ตัวรัน Docker Compose สลับโหมด `local` / `production` อัตโนมัติตามค่า `APP_ENV` ใน `.env`
 
-## โครงสร้าง Git Branches & การแยกโฟลเดอร์ Dev / UAT บนเครื่องหลัก
-- **Branches:** `dev` (พัฒนาฟีเจอร์หลัก) -> `uat` (ทดสอบบน UAT Server) -> `main` (Production)
-- **Dev Folder:** `e-com-rental-cloth/backend` (Branch `dev`, `APP_ENV=local`, `PORT=8080`)
-- **UAT Folder:** `e-com-rental-cloth-uat/backend` (Branch `uat`, `APP_ENV=uat`, `PORT=8180`, Public URL: `https://api-uat-rental-cloth.sutiphonglabs.com` ผ่าน Cloudflare Tunnel)
+## โครงสร้าง Git Branches, CI/CD & การแยกโฟลเดอร์ Dev / UAT
+- **สายพาน Git Branches:** กิ่งนักพัฒนา/ฟีเจอร์ (`milk`, `<dev-name>`, `feat/*`, `fix/*`) -> `git pull --rebase origin dev` -> Merge/PR เข้า `dev` *(รัน CI + Auto-merge เข้า `uat` โดยยังไม่ Deploy)* -> กดรัน **`Deploy UAT (Manual)`** บน GitHub Actions เพื่ออัปเดต UAT -> Merge เข้า `main` *(Production)*
+- **Local Workspace:** `e-com-rental-cloth/backend` (เกาะกิ่ง `milk`, `APP_ENV=local`, `PORT=8080`, `POSTGRES_PORT=5432`)
+- **UAT Host Folder:** `e-com-rental-cloth-uat/backend` (ล็อกกิ่ง `uat`, `APP_ENV=uat`, `PORT=8180`, `POSTGRES_PORT=5532`, Public URL: `https://api-uat-rental-cloth.sutiphonglabs.com` ผ่าน Cloudflare Tunnel)
+- **GitHub Actions (`.github/workflows/`):**
+  - `ci.yml` — รัน `golangci-lint`, `govulncheck`, `go test`, และคอมไพล์ Binary ทดสอบทุกกิ่งที่ Push พร้อม Auto-merge `dev -> uat` เมื่อรวมเข้า `dev`
+  - `deploy-uat.yml` — กดรันแบบ Manual (`workflow_dispatch`) ผ่าน Self-Hosted Runner บนเครื่องหลักเพื่ออัปเดต UAT Container และตรวจ `/api/v1/health`
 
 ## การรันผ่าน Docker
 คัดลอก `.env.example` เป็น `.env` แล้วรันคำสั่ง:

@@ -1,0 +1,237 @@
+name: Deploy UAT (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      no_cache:
+        description: 'Force clean Docker rebuild (--no-cache)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: deploy-uat-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy-uat:
+    name: Pull uat & Redeploy Containers on UAT Host
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      deployments: write
+    env:
+      UAT_PUBLIC_URL: https://api-uat-rental-cloth.sutiphonglabs.com
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Register GitHub Deployment (In Progress)
+        id: gh_deploy
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            $headers = @{
+              'Authorization'        = "Bearer $env:GH_TOKEN"
+              'Accept'               = 'application/vnd.github+json'
+              'X-GitHub-Api-Version' = '2022-11-28'
+              'User-Agent'           = 'GitHub-Actions-UAT-Deploy'
+            }
+            $runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            $createBody = @{
+              ref                    = 'uat'
+              environment            = 'uat'
+              auto_merge             = $false
+              required_contexts      = @()
+              production_environment = $false
+              description            = 'UAT Backend Deployment'
+            } | ConvertTo-Json
+
+            $dep = Invoke-RestMethod -Method Post `
+              -Uri "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/deployments" `
+              -Headers $headers -Body $createBody -ContentType 'application/json'
+
+            "deployment_id=$($dep.id)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+            $statusBody = @{
+              state       = 'in_progress'
+              log_url     = $runUrl
+              environment = 'uat'
+              description = 'Building and restarting UAT Backend Docker containers...'
+            } | ConvertTo-Json
+
+            Invoke-RestMethod -Method Post `
+              -Uri "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/deployments/$($dep.id)/statuses" `
+              -Headers $headers -Body $statusBody -ContentType 'application/json' | Out-Null
+            Write-Output "Registered GitHub Deployment ID: $($dep.id)"
+          } catch {
+            Write-Warning "Could not register GitHub Deployment API entry: $($_.Exception.Message)"
+          }
+
+      - name: Pull latest uat branch and redeploy Docker stack
+        id: deploy
+        shell: powershell
+        env:
+          UAT_DIR: ${{ vars.UAT_BACKEND_DIR || 'C:\Users\sutip\.gemini\antigravity\scratch\e-com-rental-cloth-uat\backend' }}
+          NO_CACHE: ${{ inputs.no_cache }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $startedAt = Get-Date
+          $env:Path = "$env:LOCALAPPDATA\Programs\go\bin;$env:USERPROFILE\go\bin;$env:LOCALAPPDATA\Programs\bin;" + $env:Path
+
+          # 1. Ensure Docker Engine is running on host (spawn detached via WMI so Job Object cleanup never kills it)
+          docker info >$null 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            $ddExe = "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe"
+            if (-not (Test-Path $ddExe)) {
+              $ddExe = 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
+            }
+            if (Test-Path $ddExe) {
+              Write-Output "Starting Docker Desktop via WMI..."
+              Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "`"$ddExe`"" } | Out-Null
+              for ($i = 1; $i -le 40; $i++) {
+                Start-Sleep -Seconds 3
+                docker info >$null 2>&1
+                if ($LASTEXITCODE -eq 0) { break }
+              }
+            }
+          }
+          docker info --format 'Docker Engine: {{.ServerVersion}}'
+          if ($LASTEXITCODE -ne 0) { throw "Docker Engine is not reachable." }
+
+          # 2. Sync UAT host directory to latest origin/uat (preserves gitignored .env)
+          if (-not (Test-Path $env:UAT_DIR)) {
+            throw "UAT directory not found: $env:UAT_DIR"
+          }
+          Set-Location $env:UAT_DIR
+          git fetch origin uat
+          git checkout uat
+          git reset --hard origin/uat
+
+          $commitSha = (git rev-parse --short HEAD).Trim()
+          $commitMsg = (git log -1 --pretty=%s).Trim()
+          $commitAuthor = (git log -1 --pretty=%an).Trim()
+          Write-Output "Synced UAT Backend to commit: $commitSha - $commitMsg"
+
+          # 3. Rebuild & restart UAT containers (postgres + migrate + api + worker + cloudflared)
+          if ($env:NO_CACHE -eq 'true') {
+            go run ./scripts/docker.go build --no-cache
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          go run ./scripts/docker.go up -d --build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # 4. Verify local API healthcheck
+          $healthJson = ''
+          $healthy = $false
+          for ($attempt = 1; $attempt -le 20; $attempt++) {
+            try {
+              $res = Invoke-WebRequest -Uri 'http://127.0.0.1:8180/api/v1/health' -UseBasicParsing -TimeoutSec 5
+              if ($res.StatusCode -eq 200) {
+                $healthJson = $res.Content.Trim()
+                Write-Output "Healthcheck passed on attempt $attempt : $healthJson"
+                $healthy = $true
+                break
+              }
+            } catch {
+              Start-Sleep -Seconds 2
+            }
+          }
+          if (-not $healthy) {
+            throw "UAT Backend failed post-deploy healthcheck on port 8180."
+          }
+
+          # 5. Clean up dangling images
+          docker image prune -f | Out-Null
+
+          # 6. Collect container resource stats & write rich GitHub Job Summary card
+          $bt = [char]96
+          $durationSec = [math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1)
+          $containers = @(
+            'ecom-rental-backend-api-uat',
+            'ecom-rental-backend-worker-uat',
+            'ecom-rental-postgres-uat',
+            'ecom-rental-backend-cloudflared-uat'
+          )
+          $existingContainers = @()
+          foreach ($c in $containers) {
+            $exists = docker ps --filter "name=^/$c$" --format '{{.Names}}'
+            if ($exists) { $existingContainers += $c }
+          }
+          $statsLines = ''
+          if ($existingContainers.Count -gt 0) {
+            $statsLines = docker stats --no-stream --format "| ${bt}{{.Name}}${bt} | {{.CPUPerc}} | {{.MemUsage}} |" @existingContainers
+          }
+
+          $summary = @(
+            "## 🚀 UAT Backend Deployment Summary",
+            "",
+            "| Property | Value |",
+            "| :--- | :--- |",
+            "| **Environment** | ${bt}uat${bt} (Active) |",
+            "| **Live API Base URL** | [$env:UAT_PUBLIC_URL]($env:UAT_PUBLIC_URL) |",
+            "| **Health Check** | [$env:UAT_PUBLIC_URL/api/v1/health]($env:UAT_PUBLIC_URL/api/v1/health) (${bt}200 OK${bt}) |",
+            "| **Deployed Commit** | ${bt}$commitSha${bt} — $commitMsg *(by $commitAuthor)* |",
+            "| **Deploy Duration** | ${durationSec}s |",
+            "",
+            "### 📦 Active UAT Backend Containers",
+            "| Container | CPU | Memory Usage |",
+            "| :--- | :--- | :--- |",
+            $statsLines
+          ) -join "`n"
+
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Update GitHub Deployment Status (Success)
+        if: success() && steps.gh_deploy.outputs.deployment_id != ''
+        shell: powershell
+        env:
+          DEPLOYMENT_ID: ${{ steps.gh_deploy.outputs.deployment_id }}
+        run: |
+          try {
+            $headers = @{
+              'Authorization'        = "Bearer $env:GH_TOKEN"
+              'Accept'               = 'application/vnd.github+json'
+              'X-GitHub-Api-Version' = '2022-11-28'
+              'User-Agent'           = 'GitHub-Actions-UAT-Deploy'
+            }
+            $runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            $body = @{
+              state           = 'success'
+              environment     = 'uat'
+              environment_url = "$env:UAT_PUBLIC_URL/api/v1/health"
+              log_url         = $runUrl
+              description     = 'UAT Backend API & Worker are live'
+            } | ConvertTo-Json
+            Invoke-RestMethod -Method Post `
+              -Uri "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/deployments/$env:DEPLOYMENT_ID/statuses" `
+              -Headers $headers -Body $body -ContentType 'application/json' | Out-Null
+          } catch {
+            Write-Warning "Could not update GitHub Deployment status: $($_.Exception.Message)"
+          }
+
+      - name: Update GitHub Deployment Status (Failure)
+        if: failure() && steps.gh_deploy.outputs.deployment_id != ''
+        shell: powershell
+        env:
+          DEPLOYMENT_ID: ${{ steps.gh_deploy.outputs.deployment_id }}
+        run: |
+          try {
+            $headers = @{
+              'Authorization'        = "Bearer $env:GH_TOKEN"
+              'Accept'               = 'application/vnd.github+json'
+              'X-GitHub-Api-Version' = '2022-11-28'
+              'User-Agent'           = 'GitHub-Actions-UAT-Deploy'
+            }
+            $runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            $body = @{
+              state       = 'failure'
+              environment = 'uat'
+              log_url     = $runUrl
+              description = 'UAT Backend deployment failed'
+            } | ConvertTo-Json
+            Invoke-RestMethod -Method Post `
+              -Uri "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/deployments/$env:DEPLOYMENT_ID/statuses" `
+              -Headers $headers -Body $body -ContentType 'application/json' | Out-Null
+          } catch {
+            Write-Warning "Could not update GitHub Deployment failure status: $($_.Exception.Message)"
+          }

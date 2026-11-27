@@ -48,11 +48,16 @@
 
 ## 4. โครงสร้าง Git Branches, การแยกโฟลเดอร์ Dev / UAT, และการรัน Docker (`APP_ENV`)
 
-### โครงสร้าง Branch & โฟลเดอร์บนเครื่องหลัก (มาตรฐานเดียวกับ `frontend/`)
-- **Git Branches:** `dev` (พัฒนาฟีเจอร์หลัก) -> `uat` (ทดสอบบน UAT Server) -> `main` (Production)
+### โครงสร้าง Branch & โฟลเดอร์บนเครื่องหลัก (รองรับการทำงานหลายคน มาตรฐานเดียวกับ `frontend/`)
+- **Git Branches (สายพานการทำงานจริงสำหรับทีม):**
+  กิ่งของนักพัฒนาแต่ละคนหรือกิ่งฟีเจอร์ *(เช่น `<dev-name>`, `dev/<name>`, `feat/*`, `fix/*` — แก้โค้ดบน Local)* -> ดึง `git pull --rebase origin dev` ล่าสุดกันชนกัน -> Merge/PR เข้ากิ่งกลาง `dev` *(รัน CI + Auto-merge เข้า `uat`)* -> `uat` *(กด Deploy เองเพื่อทำ Dev Test / Tester Test)* -> Merge เข้า `main` *(Production)*
 - **โฟลเดอร์แยกอิสระ (ป้องกันพอร์ต, Container, และข้อมูล DB ชนกันเมื่อรันพร้อมกันบนเครื่องเดียว):**
-  - **Dev Workspace:** `e-com-rental-cloth/backend` (เกาะ Branch `dev`, ตั้ง `APP_ENV=local`, `PORT=8080`, `POSTGRES_PORT=5432`)
-  - **UAT Host Folder:** `e-com-rental-cloth-uat/backend` (เกาะ Branch `uat`, ตั้ง `APP_ENV=uat`, `PORT=8180`, เชื่อมโดเมน `https://api-uat-rental-cloth.sutiphonglabs.com` ผ่าน Cloudflare Tunnel `rental-cloth-backend-uat-tunnel` อัตโนมัติเมื่อมีค่า `CLOUDFLARE_TUNNEL_TOKEN` ใน `.env` — เวลาอัปเดต UAT ให้รัน `go run ./scripts/docker.go redeploy` ในโฟลเดอร์ UAT)
+  - **Local Workspace (`e-com-rental-cloth/backend`):** โฟลเดอร์ทำงานบนเครื่องนักพัฒนา (ปัจจุบันเกาะกิ่ง `milk`, ตั้ง `APP_ENV=local`, `PORT=8080`, `POSTGRES_PORT=5432`) ใช้แก้โค้ดและเทสบน `localhost:8080` ได้อิสระโดยไม่กระทบ `dev`/`uat`
+  - **UAT Host Folder (`e-com-rental-cloth-uat/backend`):** ล็อกไว้ที่กิ่ง **`uat`** เท่านั้น (ห้ามเข้าไปนั่งแก้โค้ด ตั้ง `APP_ENV=uat`, `PORT=8180`, `POSTGRES_PORT=5532`, เชื่อมโดเมน `https://api-uat-rental-cloth.sutiphonglabs.com` ผ่าน Cloudflare Tunnel `rental-cloth-backend-uat-tunnel` อัตโนมัติเมื่อมีค่า `CLOUDFLARE_TUNNEL_TOKEN` ใน `.env` — เวลาอัปเดต UAT ให้กดปุ่ม Deploy บน GitHub Actions หรือรัน `go run ./scripts/docker.go redeploy` ในโฟลเดอร์ UAT)
+
+### CI/CD อัตโนมัติบน GitHub Actions (`.github/workflows/`)
+- **`ci.yml` (`CI & Auto-Sync UAT`):** รองรับทุกกิ่งของนักพัฒนาทุกคนอัตโนมัติ (`branches-ignore: [uat, main]`) โดยรันตรวจ `golangci-lint`, `govulncheck`, `go test`, และทดลองคอมไพล์ Binary สำหรับ UAT ให้ทุกกิ่งที่ Push และเฉพาะเมื่อโค้ดถูกรวมเข้ากิ่งกลาง `dev` เท่านั้นจึงจะสั่ง **Auto-merge จาก `dev` เข้า `uat` อัตโนมัติโดยยังไม่สั่ง Deploy**
+- **`deploy-uat.yml` (`Deploy UAT (Manual)`):** ตั้งเป็น `workflow_dispatch` (ไม่รันเอง ต้องกดปุ่ม **Run workflow** ในแท็บ Actions ของ GitHub เท่านั้น) เพื่อสั่ง Self-Hosted Runner บนเครื่องหลักให้ดึงกิ่ง `uat` ล่าสุดไป Build/Restart ชุด Container (`postgres`, `migrate`, `api`, `worker`, `cloudflared`) ขึ้น `https://api-uat-rental-cloth.sutiphonglabs.com` พร้อมตรวจ `/api/v1/health`, อัปเดตสถานะ GitHub Deployments + Job Summary Card, และล้าง Image เก่าอัตโนมัติ
 
 ### การสลับโหมด Docker อัตโนมัติด้วย `APP_ENV` (`scripts/docker.go`)
 สคริปต์จะตั้งชื่อ Compose Project, Volume ฐานข้อมูล, และ Container แยกตาม `APP_ENV` (`ecom-rental-backend-<env>`) ทำให้รันทั้งชุด Dev และชุด UAT พร้อมกันบนเครื่องเดียวได้โดยข้อมูลไม่ปนกัน:

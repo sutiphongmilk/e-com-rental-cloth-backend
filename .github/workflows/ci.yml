@@ -1,0 +1,77 @@
+name: CI & Auto-Sync UAT
+
+on:
+  push:
+    branches-ignore:
+      - uat
+      - main
+  pull_request:
+    branches:
+      - dev
+      - uat
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, Vulncheck, Test & Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go toolchain
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install golangci-lint v2 & govulncheck
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.15.0
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run golangci-lint
+        run: golangci-lint run ./...
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+      - name: Run Go tests
+        run: go test -v ./...
+
+      - name: Test compiled UAT static binaries
+        env:
+          CGO_ENABLED: "0"
+          APP_ENV: uat
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags="-s -w" -o dist/api ./cmd/api
+          go build -trimpath -ldflags="-s -w" -o dist/worker ./cmd/worker
+          go build -trimpath -ldflags="-s -w" -o dist/migrate ./cmd/migrate
+
+  sync-uat:
+    name: Auto-Merge dev -> uat (No Deploy)
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout full git history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge dev into uat branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin dev uat
+          git checkout -B uat origin/uat
+          git merge origin/dev --no-edit -m "chore(uat): auto-sync verified changes from dev"
+          git push origin uat
